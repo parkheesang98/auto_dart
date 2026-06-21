@@ -95,14 +95,23 @@ print("Reports count:", len(reports))
 
 for item in reports:
 
-    filer = item.get("flr_nm", "")
-    report_nm = item.get("report_nm", "")
+    corp_name = item.get("corp_name")
+    report_nm = item.get("report_nm")
+    filer = item.get("flr_nm")
 
-    if filer != "국민연금공단":
-        continue
+    message = f"""
+[DART 테스트]
 
-    if "주식등의대량보유상황보고서" not in report_nm:
-        continue
+종목: {corp_name}
+공시: {report_nm}
+제출자: {filer}
+"""
+
+    send_telegram(message)
+
+    print(message)
+
+    break
 
     corp_name = item.get("corp_name")
     rcept_dt = item.get("rcept_dt")

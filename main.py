@@ -85,7 +85,7 @@ def save_sent_report(rcept_no):
 sent_reports = load_sent_reports()
 
 end_date = datetime.today()
-start_date = end_date - timedelta(days=7)
+start_date = end_date - timedelta(days=30)
 
 url = "https://opendart.fss.or.kr/api/list.json"
 

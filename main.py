@@ -3,64 +3,112 @@ import os
 import requests
 from datetime import datetime, timedelta
 
+try:
+    from anthropic import Anthropic
+except:
+    Anthropic = None
+
 load_dotenv()
 
 DART_API_KEY = os.getenv("DART_API_KEY")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+
+
+def send_telegram(message):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+
+    requests.post(
+        url,
+        data={
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": message
+        },
+        timeout=30
+    )
+
+
+def summarize_with_claude(text):
+
+    if not ANTHROPIC_API_KEY or Anthropic is None:
+        return None
+
+    try:
+        client = Anthropic(api_key=ANTHROPIC_API_KEY)
+
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=300,
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"""
+다음 DART 공시 정보를 투자자 관점에서 3줄 이내로 요약해줘.
+
+{text}
+"""
+                }
+            ]
+        )
+
+        return response.content[0].text
+
+    except Exception as e:
+        print("Claude Error:", e)
+        return None
+
 
 end_date = datetime.today()
-start_date = end_date - timedelta(days=7)
+start_date = end_date - timedelta(days=1)
 
 url = "https://opendart.fss.or.kr/api/list.json"
 
-all_reports = []
-page_no = 1
+params = {
+    "crtfc_key": DART_API_KEY,
+    "bgn_de": start_date.strftime("%Y%m%d"),
+    "end_de": end_date.strftime("%Y%m%d"),
+    "page_no": 1,
+    "page_count": 100,
+    "last_reprt_at": "Y"
+}
 
-while True:
+response = requests.get(url, params=params, timeout=30)
+data = response.json()
 
-    params = {
-        "crtfc_key": DART_API_KEY,
-        "bgn_de": start_date.strftime("%Y%m%d"),
-        "end_de": end_date.strftime("%Y%m%d"),
-        "page_no": page_no,
-        "page_count": 100,
-        "last_reprt_at": "Y"
-    }
+reports = data.get("list", [])
 
-    response = requests.get(url, params=params)
-    data = response.json()
-
-    if page_no == 1:
-        print("상태코드:", data.get("status"))
-        print("메시지:", data.get("message"))
-        print("전체 페이지:", data.get("total_page"))
-        print("전체 건수:", data.get("total_count"))
-
-    reports = data.get("list", [])
-
-    if not reports:
-        break
-
-    all_reports.extend(reports)
-
-    total_page = int(data.get("total_page", 1))
-
-    if page_no >= total_page:
-        break
-
-    page_no += 1
-
-print()
-print("수집된 공시 수:", len(all_reports))
-print()
-
-for item in all_reports:
+for item in reports:
 
     filer = item.get("flr_nm", "")
+    report_nm = item.get("report_nm", "")
 
-    if filer == "국민연금공단":
+    if filer != "국민연금공단":
+        continue
 
-        print("-----")
-        print("회사:", item.get("corp_name"))
-        print("공시:", item.get("report_nm"))
-        print("제출자:", filer)
-        print("접수일:", item.get("rcept_dt"))
+    if "주식등의대량보유상황보고서" not in report_nm:
+        continue
+
+    corp_name = item.get("corp_name")
+    rcept_dt = item.get("rcept_dt")
+    rcept_no = item.get("rcept_no")
+
+    base_text = f"""
+[국민연금 신규 공시]
+
+종목: {corp_name}
+공시: {report_nm}
+접수일: {rcept_dt}
+접수번호: {rcept_no}
+"""
+
+    summary = summarize_with_claude(base_text)
+
+    if summary:
+        message = f"{base_text}\n\n[Claude 요약]\n{summary}"
+    else:
+        message = base_text
+
+    send_telegram(message)
+
+    print(message)

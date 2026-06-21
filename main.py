@@ -19,7 +19,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
 
-    requests.post(
+    response = requests.post(
         url,
         data={
             "chat_id": TELEGRAM_CHAT_ID,
@@ -27,6 +27,16 @@ def send_telegram(message):
         },
         timeout=30
     )
+
+    print("Telegram status:", response.status_code)
+    print("Telegram response:", response.text)
+
+
+# =========================
+# 테스트 메시지
+# =========================
+send_telegram("✅ GitHub Actions Telegram Test")
+print("Telegram test sent")
 
 
 def summarize_with_claude(text):
@@ -76,7 +86,12 @@ params = {
 response = requests.get(url, params=params, timeout=30)
 data = response.json()
 
+print("DART status:", data.get("status"))
+print("DART message:", data.get("message"))
+
 reports = data.get("list", [])
+
+print("Reports count:", len(reports))
 
 for item in reports:
 

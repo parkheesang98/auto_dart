@@ -65,6 +65,32 @@ for item in reports[:10]:
         item.get("flr_nm")
     )
 
+for item in reports:
+
+    filer = item.get("flr_nm", "")
+    report_nm = item.get("report_nm", "")
+
+    if filer != "국민연금공단":
+        continue
+
+    if "주식등의대량보유상황보고서" not in report_nm:
+        continue
+
+    corp_name = item.get("corp_name")
+    rcept_dt = item.get("rcept_dt")
+
+    message = f"""
+[국민연금 신규 공시]
+
+종목: {corp_name}
+공시: {report_nm}
+접수일: {rcept_dt}
+"""
+
+    send_telegram(message)
+
+    print(message)
+
 print("=========================\n")
 
 if reports:

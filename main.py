@@ -31,7 +31,7 @@ send_telegram("✅ GitHub Actions Telegram Test")
 print("Telegram test sent")
 
 end_date = datetime.today()
-start_date = end_date - timedelta(days=1)
+start_date = end_date - timedelta(days=7)
 
 url = "https://opendart.fss.or.kr/api/list.json"
 
@@ -41,7 +41,7 @@ params = {
     "end_de": end_date.strftime("%Y%m%d"),
     "page_no": 1,
     "page_count": 100,
-    "last_reprt_at": "Y"
+    # "last_reprt_at": "Y"
 }
 
 response = requests.get(url, params=params, timeout=30)

@@ -3,17 +3,25 @@ import os
 import requests
 from datetime import datetime, timedelta
 
+try:
+    from anthropic import Anthropic
+except:
+    Anthropic = None
+
 load_dotenv()
 
 DART_API_KEY = os.getenv("DART_API_KEY")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+
+SENT_FILE = "sent_reports.txt"
 
 
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
 
-    response = requests.post(
+    requests.post(
         url,
         data={
             "chat_id": TELEGRAM_CHAT_ID,
@@ -22,13 +30,59 @@ def send_telegram(message):
         timeout=30
     )
 
-    print("Telegram status:", response.status_code)
-    print("Telegram response:", response.text)
+
+def summarize_with_claude(text):
+
+    if not ANTHROPIC_API_KEY or Anthropic is None:
+        return None
+
+    try:
+        client = Anthropic(
+            api_key=ANTHROPIC_API_KEY
+        )
+
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=200,
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"""
+아래 공시를 투자자 관점에서 3줄 이내로 요약해줘.
+
+{text}
+"""
+                }
+            ]
+        )
+
+        return response.content[0].text
+
+    except Exception as e:
+        print("Claude Error:", e)
+        return None
 
 
-# Telegram 테스트
-send_telegram("✅ GitHub Actions Telegram Test")
-print("Telegram test sent")
+def load_sent_reports():
+
+    if not os.path.exists(SENT_FILE):
+        return set()
+
+    with open(SENT_FILE, "r", encoding="utf-8") as f:
+        return set(
+            line.strip()
+            for line in f.readlines()
+            if line.strip()
+        )
+
+
+def save_sent_report(rcept_no):
+
+    with open(SENT_FILE, "a", encoding="utf-8") as f:
+        f.write(f"{rcept_no}\n")
+
+
+sent_reports = load_sent_reports()
 
 end_date = datetime.today()
 start_date = end_date - timedelta(days=7)
@@ -40,30 +94,20 @@ params = {
     "bgn_de": start_date.strftime("%Y%m%d"),
     "end_de": end_date.strftime("%Y%m%d"),
     "page_no": 1,
-    "page_count": 100,
-    # "last_reprt_at": "Y"
+    "page_count": 100
 }
 
-response = requests.get(url, params=params, timeout=30)
-data = response.json()
+response = requests.get(
+    url,
+    params=params,
+    timeout=30
+)
 
-print("DART status:", data.get("status"))
-print("DART message:", data.get("message"))
+data = response.json()
 
 reports = data.get("list", [])
 
-print("Reports count:", len(reports))
-
-print("\n===== 최근 공시 10건 =====")
-
-for item in reports[:10]:
-    print(
-        item.get("corp_name"),
-        "|",
-        item.get("report_nm"),
-        "|",
-        item.get("flr_nm")
-    )
+print("Reports:", len(reports))
 
 for item in reports:
 
@@ -76,41 +120,38 @@ for item in reports:
     if "주식등의대량보유상황보고서" not in report_nm:
         continue
 
+    rcept_no = item.get("rcept_no")
+
+    if rcept_no in sent_reports:
+        continue
+
     corp_name = item.get("corp_name")
     rcept_dt = item.get("rcept_dt")
 
-    message = f"""
+    base_text = f"""
 [국민연금 신규 공시]
 
 종목: {corp_name}
 공시: {report_nm}
 접수일: {rcept_dt}
+접수번호: {rcept_no}
 """
+
+    summary = summarize_with_claude(base_text)
+
+    if summary:
+        message = (
+            f"{base_text}\n\n"
+            f"[Claude 요약]\n"
+            f"{summary}"
+        )
+    else:
+        message = base_text
 
     send_telegram(message)
 
-    print(message)
+    save_sent_report(rcept_no)
 
-print("=========================\n")
-
-if reports:
-    item = reports[0]
-
-    corp_name = item.get("corp_name")
-    report_nm = item.get("report_nm")
-    filer = item.get("flr_nm")
-
-    message = f"""
-[DART 테스트]
-
-종목: {corp_name}
-공시: {report_nm}
-제출자: {filer}
-"""
-
-    send_telegram(message)
-
-    print(message)
-
-else:
-    print("조회된 공시 없음")
+    print(
+        f"Sent: {corp_name} / {rcept_no}"
+    )

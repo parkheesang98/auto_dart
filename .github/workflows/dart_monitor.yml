@@ -1,5 +1,8 @@
 name: DART Monitor
 
+permissions:
+  contents: write
+  
 on:
   schedule:
     - cron: "*/10 * * * *"

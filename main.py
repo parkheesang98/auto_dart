@@ -4,9 +4,9 @@ import requests
 from datetime import datetime, timedelta
 
 try:
-from anthropic import Anthropic
+    from anthropic import Anthropic
 except:
-Anthropic = None
+    Anthropic = None
 
 load_dotenv()
 
